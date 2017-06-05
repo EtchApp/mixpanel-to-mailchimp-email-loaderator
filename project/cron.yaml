@@ -1,0 +1,5 @@
+cron:
+- description: loaderator cron
+  url: /run
+  schedule: every 12 hours
+  target: cron
