@@ -19,11 +19,16 @@ DEBUG               = True                      # noqa: E221
 BUCKET              = '...'                     # noqa: E221
 KMS_LOCATION        = 'global'                  # noqa: E221
 KMS_KEYRING         = '...'                     # noqa: E221
-MAILCHIMP_LISTID    = '...'                     # noqa: E221
 MAILCHIMP_CRYPTOKEY = 'mailchimp'               # noqa: E221
 MAILCHIMP_API_FILE  = 'mailchimp.encrypted'     # noqa: E221
 MIXPANEL_CRYPTOKEY  = 'mixpanel'                # noqa: E221
 MIXPANEL_API_FILE   = 'mixpanel.encrypted'      # noqa: E221
+
+# General List
+MAILCHIMP_LISTID             = '...'     # noqa: E221
+# Property-based List
+MAILCHIMP_PROPERTY_LISTID    = '...'     # noqa: E221
+PROPERTY_WHERE_CLAUSE        = '(properties["some property"] >= some_value)'  # noqa: E221, E501
 
 
 app = Flask(__name__)
@@ -64,21 +69,24 @@ def get_credentials(cryptokey, filename):
     return credentials_dec
 
 
-def get_new_users(key):
+def get_new_users(key, where_clause=False):
     """Gets new users from MixPanel."""
     logging.info('Making an API call to MixPanel')
     api = Mixpanel(api_secret=str(key).strip())
     mixpanel_data = {}
     try:
-        mixpanel_data = api.request(['engage'])
-        """  # noqa: E501
-          The $created People Property appears to have dissappeared.  :(
-          Until it is back, we cannot filter by it, not sure if they even support this
-          in the 'where' clause.
-          Doc: https://mixpanel.com/help/reference/data-export-api#people-analytics
-          Reached out here: https://twitter.com/mediocrity/status/871543709539508229
-        'where': '(properties["$created"]) < XXXX-YY-ZZ'
-        """
+        if where_clause:
+            mixpanel_data = api.request(['engage'], {'where': where_clause})
+            """  # noqa: E501
+              The $created People Property appears to have dissappeared.  :(
+              Until it is back, we cannot filter by it, not sure if they even support this
+              in the 'where' clause.
+              Doc: https://mixpanel.com/help/reference/data-export-api#people-analytics
+              Reached out here: https://twitter.com/mediocrity/status/871543709539508229
+            'where': '(properties["$created"]) < XXXX-YY-ZZ'
+            """
+        else:
+            mixpanel_data = api.request(['engage'])
     except (urllib2.URLError, urllib2.HTTPError) as error:
         logging.exception('An error occurred: {0}'.format(error))
 
@@ -116,7 +124,7 @@ def cleanup_mixpanel_data(results):
     return cleaned_up_data
 
 
-def push_new_users_to_mailchimp(key, new_users):
+def push_new_users_to_mailchimp(key, new_users, list_id):
     """Push new users to MailChimp new user list."""
     logging.info('Making an API call to MailChimp')
     client = MailChimp('apikey', str(key).strip())
@@ -124,7 +132,7 @@ def push_new_users_to_mailchimp(key, new_users):
     for email, full_name in new_users.iteritems():
         name_split = full_name.split()
         try:
-            client.lists.members.create(MAILCHIMP_LISTID, {
+            client.lists.members.create(list_id, {
                 'email_address': email,
                 'status': 'subscribed',
                 'merge_fields': {
@@ -147,9 +155,15 @@ def push_new_users_to_mailchimp(key, new_users):
 
 def runit():
     """Runs the task."""
-    new_users = get_new_users(get_credentials(MIXPANEL_CRYPTOKEY, MIXPANEL_API_FILE))                           # noqa: E501
-    new_users_formatted = cleanup_mixpanel_data(new_users)                                                      # noqa: E501
-    push_new_users_to_mailchimp(get_credentials(MAILCHIMP_CRYPTOKEY, MAILCHIMP_API_FILE), new_users_formatted)  # noqa: E501
+    mixpanel_creds = get_credentials(MIXPANEL_CRYPTOKEY, MIXPANEL_API_FILE)
+    mailchimp_creds = get_credentials(MAILCHIMP_CRYPTOKEY, MAILCHIMP_API_FILE)
+
+    new_users = get_new_users(mixpanel_creds)
+    new_users_formatted = cleanup_mixpanel_data(new_users)
+    property_based_users = get_new_users(mixpanel_creds, PROPERTY_WHERE_CLAUSE)                              # noqa: E501
+    property_based_users_formatted = cleanup_mixpanel_data(property_based_users)                             # noqa: E501
+    push_new_users_to_mailchimp(mailchimp_creds, new_users_formatted, MAILCHIMP_LISTID)                      # noqa: E501
+    push_new_users_to_mailchimp(mailchimp_creds, property_based_users_formatted, MAILCHIMP_PROPERTY_LISTID)  # noqa: E501
     return 'Completed'
 
 
