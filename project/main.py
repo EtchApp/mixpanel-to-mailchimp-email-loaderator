@@ -15,7 +15,6 @@ from mixpanel import Mixpanel
 import requests
 
 
-DEBUG               = True                      # noqa: E221
 BUCKET              = '...'                     # noqa: E221
 KMS_LOCATION        = 'global'                  # noqa: E221
 KMS_KEYRING         = '...'                     # noqa: E221
@@ -26,6 +25,8 @@ MIXPANEL_API_FILE   = 'mixpanel.encrypted'      # noqa: E221
 
 # General List
 MAILCHIMP_LISTID             = '...'     # noqa: E221
+# General Weekly List
+MAILCHIMP_WEEKLY_LISTID      = '...'     # noqa: E221
 # Property-based List
 MAILCHIMP_PROPERTY_LISTID    = '...'     # noqa: E221
 PROPERTY_WHERE_CLAUSE        = '(properties["some property"] >= some_value)'  # noqa: E221, E501
@@ -127,7 +128,9 @@ def cleanup_mixpanel_data(results):
 def push_new_users_to_mailchimp(key, new_users, list_id):
     """Push new users to MailChimp new user list."""
     logging.info('Making an API call to MailChimp')
+    logging.info('Pushing New Users to list: {0}'.format(list_id))
     client = MailChimp('apikey', str(key).strip())
+    emails_added_for_debugging = []
 
     for email, full_name in new_users.iteritems():
         name_split = full_name.split()
@@ -141,15 +144,19 @@ def push_new_users_to_mailchimp(key, new_users, list_id):
                 },
             })
 
+            emails_added_for_debugging.append(email)
+
             """  # noqa: E501
             Not the ideal but create_or_update doesn't help either.
             Might need to move away from the lovely mailchimp3 library or path it to
             deal with MailChimp API throwing a 400 on create if the member exists.
             """
-        except requests.exceptions.HTTPError:
-            logging.error('Member: {0}, is already on the list'.format(email))    # noqa: E501
+        except requests.exceptions.HTTPError as error:
+            logging.error('Error: {0}'.format(error))
+            logging.error('Member: {0}, is already on the list: {1}'.format(email, list_id))    # noqa: E501
             pass
 
+    logging.info('Emails added for debugging to list: {0}, {1}'.format(list_id, emails_added_for_debugging))
     return
 
 
@@ -163,6 +170,7 @@ def runit():
     property_based_users = get_new_users(mixpanel_creds, PROPERTY_WHERE_CLAUSE)                              # noqa: E501
     property_based_users_formatted = cleanup_mixpanel_data(property_based_users)                             # noqa: E501
     push_new_users_to_mailchimp(mailchimp_creds, new_users_formatted, MAILCHIMP_LISTID)                      # noqa: E501
+    push_new_users_to_mailchimp(mailchimp_creds, new_users_formatted, MAILCHIMP_WEEKLY_LISTID)               # noqa: E501
     push_new_users_to_mailchimp(mailchimp_creds, property_based_users_formatted, MAILCHIMP_PROPERTY_LISTID)  # noqa: E501
     return 'Completed'
 
