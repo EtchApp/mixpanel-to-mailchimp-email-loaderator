@@ -156,7 +156,7 @@ def push_new_users_to_mailchimp(key, new_users, list_id):
             logging.error('Member: {0}, is already on the list: {1}'.format(email, list_id))    # noqa: E501
             pass
 
-    logging.info('Emails added for debugging to list: {0}, {1}'.format(list_id, emails_added_for_debugging))
+    logging.info('Emails added for debugging to list: {0}, {1}'.format(list_id, emails_added_for_debugging))    # noqa: E501
     return
 
 
@@ -167,11 +167,11 @@ def runit():
 
     new_users = get_new_users(mixpanel_creds)
     new_users_formatted = cleanup_mixpanel_data(new_users)
-    property_based_users = get_new_users(mixpanel_creds, PROPERTY_WHERE_CLAUSE)                              # noqa: E501
-    property_based_users_formatted = cleanup_mixpanel_data(property_based_users)                             # noqa: E501
-    push_new_users_to_mailchimp(mailchimp_creds, new_users_formatted, MAILCHIMP_LISTID)                      # noqa: E501
-    push_new_users_to_mailchimp(mailchimp_creds, new_users_formatted, MAILCHIMP_WEEKLY_LISTID)               # noqa: E501
-    push_new_users_to_mailchimp(mailchimp_creds, property_based_users_formatted, MAILCHIMP_PROPERTY_LISTID)  # noqa: E501
+    property_based_users = get_new_users(mixpanel_creds, PROPERTY_WHERE_CLAUSE)                                 # noqa: E501
+    property_based_users_formatted = cleanup_mixpanel_data(property_based_users)                                # noqa: E501
+    push_new_users_to_mailchimp(mailchimp_creds, new_users_formatted, MAILCHIMP_LISTID)                         # noqa: E501
+    push_new_users_to_mailchimp(mailchimp_creds, new_users_formatted, MAILCHIMP_WEEKLY_LISTID)                  # noqa: E501
+    push_new_users_to_mailchimp(mailchimp_creds, property_based_users_formatted, MAILCHIMP_PROPERTY_LISTID)     # noqa: E501
     return 'Completed'
 
 

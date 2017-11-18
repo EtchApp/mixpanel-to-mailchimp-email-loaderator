@@ -1,6 +1,6 @@
 Flask==0.12.2
-google-cloud==0.26.1
-google-api-python-client==1.6.2
-mailchimp3==2.0.15
-requests[security]==2.18.1
+google-cloud==0.30.0
+google-api-python-client==1.6.4
+mailchimp3==2.0.18
+requests[security]==2.18.4
 urllib3[secure]==1.22
