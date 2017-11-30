@@ -7,6 +7,7 @@ import urllib2
 
 from google.cloud import storage
 from google.appengine.api import app_identity
+from google.appengine.api import urlfetch
 import googleapiclient.discovery
 
 from flask import Flask
@@ -15,6 +16,7 @@ from mixpanel import Mixpanel
 import requests
 
 
+DEBUG               = False                     # noqa: E221
 BUCKET              = '...'                     # noqa: E221
 KMS_LOCATION        = 'global'                  # noqa: E221
 KMS_KEYRING         = '...'                     # noqa: E221
@@ -32,6 +34,7 @@ MAILCHIMP_PROPERTY_LISTID    = '...'     # noqa: E221
 PROPERTY_WHERE_CLAUSE        = '(properties["some property"] >= some_value)'  # noqa: E221, E501
 
 
+urlfetch.set_default_fetch_deadline(60)
 app = Flask(__name__)
 
 
@@ -95,16 +98,35 @@ def get_new_users(key, where_clause=False):
     session_id = mixpanel_data['session_id']    # Unsure if it stays the same
     current_page = mixpanel_data['page']
     current_total = mixpanel_data['total']
-    while current_total >= 1000:
-        logging.info('Page: {0}'.format(current_page + 1))
-        try:
-            mixpanel_data['results'].append(api.request(['engage'], {
-                'page': current_page + 1,
-                'session_id': session_id
-            })['results'])
-        except (urllib2.URLError, urllib2.HTTPError) as error:
-            logging.error('An error occurred: {0}'.format(error))
-            pass
+    logging.info('Total MixPanel User Profiles: {0}'.format(current_total))
+
+    if current_total >= 1000:
+        while True:
+            mixpanel_perpage_data = {}
+            current_page = current_page + 1
+            logging.info('MixPanel Page: {0}'.format(current_page))
+            try:
+                if where_clause:
+                    mixpanel_perpage_data = api.request(['engage'], {
+                        'page': current_page,
+                        'session_id': session_id,
+                        'where': where_clause
+                    })
+                else:
+                    mixpanel_perpage_data = api.request(['engage'], {
+                        'page': current_page,
+                        'session_id': session_id
+                    })
+            except (urllib2.URLError, urllib2.HTTPError) as error:
+                logging.error('An error occurred: {0}'.format(error))
+                pass
+
+            # Append results to existing dict
+            mixpanel_data['results'].append(mixpanel_perpage_data['results'][0])
+
+            # Once we get to the final page, break
+            if len(mixpanel_perpage_data['results']) < 1000:
+                break
 
     return mixpanel_data
 
@@ -117,9 +139,10 @@ def cleanup_mixpanel_data(results):
         try:
             cleaned_up_data[user['$properties']['$email']] = user['$properties']['$name']   # noqa: E501
         # Missing values are entirely possible, this is analytics data!
-        except (KeyError, ValueError) as error:
-            logging.error('An error occurred cleaning up data: {0}'.format(error))          # noqa: E501
-            logging.error('User data: {0}'.format(user))
+        except (KeyError, TypeError, ValueError) as error:
+            if DEBUG:
+                logging.error('An error occurred cleaning up data: {0}'.format(error))          # noqa: E501
+                logging.error('User data: {0}'.format(user))
             pass
 
     return cleaned_up_data
@@ -130,7 +153,6 @@ def push_new_users_to_mailchimp(key, new_users, list_id):
     logging.info('Making an API call to MailChimp')
     logging.info('Pushing New Users to list: {0}'.format(list_id))
     client = MailChimp('apikey', str(key).strip())
-    emails_added_for_debugging = []
 
     for email, full_name in new_users.iteritems():
         name_split = full_name.split()
@@ -143,20 +165,17 @@ def push_new_users_to_mailchimp(key, new_users, list_id):
                     'LNAME': name_split[-1],
                 },
             })
-
-            emails_added_for_debugging.append(email)
-
             """  # noqa: E501
             Not the ideal but create_or_update doesn't help either.
             Might need to move away from the lovely mailchimp3 library or path it to
             deal with MailChimp API throwing a 400 on create if the member exists.
             """
         except requests.exceptions.HTTPError as error:
-            logging.error('Error: {0}'.format(error))
-            logging.error('Member: {0}, is already on the list: {1}'.format(email, list_id))    # noqa: E501
+            if DEBUG:
+                logging.error('Error: {0}'.format(error))
+                logging.error('Member: {0}, is already on the list: {1}'.format(email, list_id))    # noqa: E501
             pass
 
-    logging.info('Emails added for debugging to list: {0}, {1}'.format(list_id, emails_added_for_debugging))    # noqa: E501
     return
 
 
