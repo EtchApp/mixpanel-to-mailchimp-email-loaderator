@@ -122,7 +122,7 @@ def get_new_users(key, where_clause=False):
                 pass
 
             # Append results to existing dict
-            mixpanel_data['results'].append(mixpanel_perpage_data['results'][0])
+            mixpanel_data['results'].append(mixpanel_perpage_data['results'][0])  # noqa: E501
 
             # Once we get to the final page, break
             if len(mixpanel_perpage_data['results']) < 1000:
@@ -137,7 +137,7 @@ def cleanup_mixpanel_data(results):
 
     for user in results['results']:
         try:
-            cleaned_up_data[user['$properties']['$email']] = user['$properties']['$name']   # noqa: E501
+            cleaned_up_data[user['$properties']['$email']] = user['$properties']['$name']       # noqa: E501
         # Missing values are entirely possible, this is analytics data!
         except (KeyError, TypeError, ValueError) as error:
             if DEBUG:
@@ -148,33 +148,41 @@ def cleanup_mixpanel_data(results):
     return cleaned_up_data
 
 
+def get_all_current_members_of_list(client, list_id):
+    """Gets all current members for a given list
+       returning email address list."""
+    members_of_list = []
+    members = client.lists.members.all(list_id, get_all=True, fields='members.email_address')   # noqa: E501
+
+    for email in members['members']:
+        members_of_list.append(email['email_address'])
+
+    return members_of_list
+
+
 def push_new_users_to_mailchimp(key, new_users, list_id):
     """Push new users to MailChimp new user list."""
     logging.info('Making an API call to MailChimp')
-    logging.info('Pushing New Users to list: {0}'.format(list_id))
     client = MailChimp('apikey', str(key).strip())
+    current_members = get_all_current_members_of_list(client, list_id)
+    logging.info('Pushing New Users to list: {0}'.format(list_id))
 
     for email, full_name in new_users.iteritems():
-        name_split = full_name.split()
-        try:
-            client.lists.members.create(list_id, {
-                'email_address': email,
-                'status': 'subscribed',
-                'merge_fields': {
-                    'FNAME': name_split[0],
-                    'LNAME': name_split[-1],
-                },
-            })
-            """  # noqa: E501
-            Not the ideal but create_or_update doesn't help either.
-            Might need to move away from the lovely mailchimp3 library or path it to
-            deal with MailChimp API throwing a 400 on create if the member exists.
-            """
-        except requests.exceptions.HTTPError as error:
-            if DEBUG:
-                logging.error('Error: {0}'.format(error))
-                logging.error('Member: {0}, is already on the list: {1}'.format(email, list_id))    # noqa: E501
-            pass
+        if email not in current_members:
+            name_split = full_name.split()
+            try:
+                client.lists.members.create(list_id, {
+                    'email_address': email,
+                    'status': 'subscribed',
+                    'merge_fields': {
+                        'FNAME': name_split[0],
+                        'LNAME': name_split[-1],
+                    },
+                })
+            except requests.exceptions.HTTPError as error:
+                if DEBUG:
+                    logging.error('Error: {0}'.format(error))
+                pass
 
     return
 

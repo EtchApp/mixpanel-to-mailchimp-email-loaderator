@@ -250,10 +250,6 @@ MailChimp API: I couldn't find any numbers from their documentation [here](https
 
 2. Locally running `dev_appserver.py` will not allow you to run the job without mocking the KMS/GCS calls. I am sure you could open up the ACLs/settings a bit further but this is unexplored at this time.
 
-3. All users are attempted to be loaded into the MailChimp list. The MailChimp API throws a 400 with the `mailchimp3` library used in the way that it is (maybe there is a better way?). The current members could be pulled first to not make this call and receive the error. Generically, all HTTP Errors are caught which is not ideal. This can certainly be improved.
-
-4. There is no special logic for users with the same email address. The email is used as a key for the cleaned-up data.
-
 ## Pull Requests
 
 Sure, but please give me some time.

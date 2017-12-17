@@ -14,6 +14,11 @@ libraries:
 - name: ssl
   version: latest
 
+# In my case, I am using a F2.
+# Feel free to tune as needed.
+# Doc: https://cloud.google.com/appengine/docs/standard/
+instance_class: F2
+
 resources:
   cpu: 1
   memory_gb: 0.5
@@ -21,3 +26,4 @@ resources:
 
 env_variables:
   PYTHONHTTPSVERIFY: 1
+  GAE_USE_SOCKETS_HTTPLIB : 'puppies!'
